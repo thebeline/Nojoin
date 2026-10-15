@@ -1,0 +1,15 @@
+Vendored, byte-identical, from openai-whisper 20250625 (MIT, Copyright (c) 2022 OpenAI; see LICENSE in this
+directory). These files keep their own MIT licence; the rest of this bundle is AGPL-3.0.
+
+Source: https://files.pythonhosted.org/packages/35/8e/d36f8880bcf18ec026a55807d02fe4c7357da9f25aebd92f85178000c0dc/openai_whisper-20250625.tar.gz
+sdist sha256 37a91a3921809d9f44748ffc73c0a55c9f366c85a3ef5c2ae0cc09540432eb96 (matches the PyPI JSON digest)
+
+Files are openai_whisper-20250625/whisper/normalizers/* and openai_whisper-20250625/LICENSE, unmodified:
+  2898e4672aeefc9f44cb4de38c115cdf286f5b35ae321433467a7674ce8841d0  english.py
+  6607f948be9824d2e1b2fa2223cd94c06c45afa4e05ea0e3d5e1f2bdffde2465  english.json
+  4742eaa040e0657fa1247a1361e0d856c62317a43326ea59a40c2e9edd8d2c38  basic.py
+  f18fcdce4caee7f2e80e4c01ab0457d3a080a872a29489542c6d23c4b0bba572  __init__.py
+  b5d65a59060e68c4ff940e1eddfa6f94b2d68fdf58ed7f4dd57721c997e35e9d  LICENSE
+
+Runtime dependencies: regex and more-itertools (see ../../requirements.txt).
+Used only by scoring/normalized.py, for the "normalized" WER lens and the normalized extra-words count.

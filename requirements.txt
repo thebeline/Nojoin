@@ -1,0 +1,5 @@
+# Host-side scoring (score.py, compare.py). Versions are the ones the write-up's numbers were scored with.
+jiwer==4.0.0
+rapidfuzz==3.14.6
+regex==2026.9.10
+more-itertools==11.1.0

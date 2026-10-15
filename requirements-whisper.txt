@@ -1,0 +1,3 @@
+# The independent word reference (whisper_words.py): the versions installed when the 2026-10-09 Lords reference was made.
+faster-whisper==1.2.1
+ctranslate2==4.8.2

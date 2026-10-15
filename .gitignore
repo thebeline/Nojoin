@@ -1,0 +1,9 @@
+# Never commit inputs or outputs: references built from Hansard/GLA text, Whisper transcripts and runs stay local.
+refs/
+runs/
+data/
+*.wav
+*.m4a
+*.mp4
+.venv/
+__pycache__/
