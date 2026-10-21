@@ -12,6 +12,26 @@ units of the write-up in Discussion #339:
 
 It ships code only: no audio, no transcripts, no official text. Every input comes from its public source.
 
+## Status
+
+Upstream 2.10.0 ([#449](https://github.com/Valtora/Nojoin/pull/449)) replaced the windowing this bundle was written
+to measure. Every device now uses windows of at most 30 s, each closed at the quietest pause after its midpoint;
+Parakeet loads fp32 on the CPU too (Canary stays int8); and a window that VAD muted to silence is skipped. On 2.10.0
+and later:
+
+- `report.json`'s `max_chunk_duration_s`, `quantization`, `snap_radius_s` and `windows_recomputed` read
+  "unavailable": the engine dropped `max_chunk_duration_s()` and the snap radius, and `onnx_asr_quantization()` and
+  `_chunk_boundaries()` changed signature.
+- Strict loss and extra words read "unavailable" wherever a window is skipped, because the windows no longer tile
+  the input (see Limits). All three #339 recordings skip at least one. VAD speech lost, WER and time still work.
+
+The terms and results below describe the 2.7–2.9 windowing.
+
+*Corrected 2026-10-21: added this Status section, and Limits now says the windows tile the input only up to 2.9.0.
+The onnxruntime thread timings and thread-pool sizing now come from #429's controlled test, Seattle's speaker count is
+marked as taken from the minutes, and the 2.7.0 re-run's time is 931.4 s with model load excluded, as in the sample
+output (the 932.8 s included it). Sections 6 and 7 now say that the planned PR series was dropped when #449 shipped.*
+
 ## Terms
 
 | Term | Meaning |
@@ -65,7 +85,7 @@ It ships code only: no audio, no transcripts, no official text. Every input come
 
 | Fixture | Source | What `fetch.sh` gets |
 |---|---|---|
-| Seattle City Council, 14 Apr 2026 (2:14:18, 52 speakers) | `https://video.seattle.gov/media/council/council_041426_2022629.mp4` | the MP4 as published |
+| Seattle City Council, 14 Apr 2026 (2:14:18, 52 speakers per the minutes) | `https://video.seattle.gov/media/council/council_041426_2022629.mp4` | the MP4 as published |
 | London Assembly, Mayor's Question Time, 17 Sep 2026 (3:01:39, 23 speakers) | `https://youtu.be/gJeQVOmCZjY` | `yt-dlp -f 140` (AAC m4a) |
 | House of Lords, 16 Sep 2026, 15:07:00–17:37:00 BST (2:30:00, 53 speakers) | `https://parliamentlive.tv/Event/Index/1deca1f8-0b69-4626-8dbd-0d0554953860` | `yt-dlp -f 66` (audio only, AAC 64 kb/s), then `ffmpeg -ss 97 -t 9000 -c copy -map_metadata -1 -movflags +faststart`. The HLS playlist starts at 14:05:23Z with no discontinuity, so t = 97 s is 14:07:00Z |
 
@@ -146,8 +166,9 @@ This file is ASR text of the Lords recording: keep it local.
   everything.
 - **Progress.** `tail -f runs/2.8.0-lords/run.log` shows the product's own log ("window 12/40 done ...").
 
-A full CPU run is about 10–20 minutes per recording on 6 cores, depending on the image (onnxruntime's default
-threads cost 1.8–2.2× our 6-thread time on Lords). A GPU run takes a few minutes, most of it the CPU prep (about
+A full CPU run is about 10–20 minutes per recording on 6 cores, depending on the image: onnxruntime's default
+thread pools make Parakeet take 2.35× as long as 6 threads, and Canary 3.6×
+([#429](https://github.com/Valtora/Nojoin/issues/429)). A GPU run takes a few minutes, most of it the CPU prep (about
 100 s for Lords).
 
 ### What a run writes
@@ -258,8 +279,8 @@ python compare.py runs/main-seattle runs/pr-seattle
 ```
 
 Add `--gpu cdi` (or `--gpu docker`) to both sides for the GPU column. Only the shipped rows can be reproduced from a
-release today. The other policies exist only in our experimental builds until each PR branch exists to build an
-image from.
+release. The other policies exist only in our experimental builds: we dropped the planned PR series once #449 shipped
+the ASR-window work in 2.10.0.
 
 ## 7. What we got
 
@@ -304,25 +325,28 @@ release's CPU text can differ slightly from ours, and its time differs a lot.
   - the 20 s cap: +0.81 / +0.55;
   - on CPU, cap + backstop: +3.26 / +1.15.
 - The two exceptions are the CPU 20 s cap on Seattle and London (8.39, 8.08). Those runs were scored after re-mapping
-  their recorded calls to upstream's last-word rule. A run's own output will match only once a PR image produces
-  that output itself.
+  their recorded calls to upstream's last-word rule. No image produces that output itself, and none will now that
+  the PR series is dropped (section 6).
 - `run.sh` on 2.7.0 (Lords, CPU, 6 pinned cores, `--lock`) reproduces the earlier 2.7.0 run in the first table. The
   prepared input has the same sha256 (`14a45017…`), the 40 windows are the same, and all 794 segments match in
   text, start and end. Every score in that column follows: 12,214 words, VAD speech lost 31.09 % (100 runs ≥ 5 s),
   the same 49 gaps, WER 52.14 / 50.14. All 40 calls were placed on the input, the windows tile it, and they equal the
-  windows recomputed from the engine's own rule. Transcription took 932.8 s, against 890.5 s the first time.
+  windows recomputed from the engine's own rule. Transcription took 931.4 s (model load excluded), against 890.5 s
+  the first time.
 
 ## Limits
 
-- **Strict loss needs every call placed and the windows tiling the input.** That holds for every released image and
-  for a capped window. If a branch's windows skip audio, or a call's audio is not an exact slice of the input, strict
-  loss and extra words report "unavailable" rather than guess. VAD speech lost and WER still work.
+- **Strict loss needs every call placed and the windows tiling the input.** That holds for every release up to
+  2.9.0 and for a capped window. If a branch's windows skip audio (2.10.0 skips silent ones), or a call's audio is
+  not an exact slice of the input, strict loss and extra words report "unavailable" rather than guess. VAD speech
+  lost and WER still work.
 - **The trace wraps the engine instance's `_get_model`.** If a branch renames it, the run is untraced
   (`report.json` → `traced: false`) and only VAD speech lost and WER are scored.
 - **Timing is one run.** Repeat a run, or alternate main and PR, before reading small time differences. Keep the
   machine otherwise idle (`--lock`). Pin CPUs on both sides.
-- **onnxruntime's defaults** create one thread per host CPU and log `pthread_setaffinity_np failed` inside a pinned
-  container. That is the product's behaviour, not the bundle's.
+- **onnxruntime's defaults** create one pinned thread per physical core of the host, whatever the container's CPU
+  limit, and log `pthread_setaffinity_np failed` inside a pinned container
+  ([#429](https://github.com/Valtora/Nojoin/issues/429)). That is the product's behaviour, not the bundle's.
 - **VRAM** comes from the host's `nvidia-smi` and `docker top`, so it needs a local Docker daemon that shares the
   host's PID view.
 - **Memory.** `drive.py` keeps a 16-bit copy of the input to place calls: about 2 bytes per sample (290 MB for Lords).
