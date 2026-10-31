@@ -1,8 +1,9 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { NoteSelection } from "@/lib/notes/noteOutbox";
 import LiveTranscriptPanel from "@/test/SharedLiveTranscript";
-import type { TranscriptSegment } from "@/types";
+import type { TimelineNote, TranscriptSegment } from "@/types";
 import { SELECTION_SETTLE_MS } from "./_hooks/useCapturedSelection";
 import TranscriptLineText from "./TranscriptLineText";
 
@@ -185,5 +186,41 @@ describe("words in an open settled line", () => {
     expect(add).toBeEnabled();
     fireEvent.click(add);
     expect(onNote).toHaveBeenCalledWith({ startMs: 1200, endMs: 1201, quotedText: "," });
+  });
+});
+
+describe("a note on one of repeated words", () => {
+  // Spread evenly over the line, the second "yes" would read 436-764 ms, so a
+  // note on its real 120-220 ms would find the first one, nearer by that guess.
+  const repeated = (): TranscriptSegment => ({
+    id: "yes", revision: 1, start: 0, end: 1.2, text: "yes yes yes", speaker: "UNKNOWN",
+    settling_required: true, locked: true,
+    words: [
+      { id: "y1", order: 0, word: "yes", start_ms: 0, end_ms: 100, locked: true },
+      { id: "y2", order: 1, word: " yes", start_ms: 120, end_ms: 220, locked: true },
+      { id: "y3", order: 2, word: " yes", start_ms: 800, end_ms: 1200, locked: true },
+    ],
+  });
+
+  it("marks the word it was made on, found by the words' own times", () => {
+    vi.useFakeTimers();
+    const onNote = vi.fn();
+    const segments = [repeated()];
+    const view = render(<LiveTranscriptPanel segments={segments} hasLoaded onNoteOnLine={onNote} />);
+    selectWords("y2", "y2");
+    fireEvent.click(screen.getByRole("button", { name: "Add note" }));
+    const selection: NoteSelection = onNote.mock.calls[0][0];
+    expect(selection).toEqual({ startMs: 120, endMs: 220, quotedText: "yes" });
+    document.getSelection()?.removeAllRanges();
+
+    const note: TimelineNote = {
+      id: "n-yes", recording_id: "rec-1", kind: "selection", body: "Which yes?",
+      start_ms: selection.startMs, end_ms: selection.endMs, quoted_text: selection.quotedText,
+      revision: 1, created_at: "2026-10-31T10:00:00", updated_at: "2026-10-31T10:00:00",
+    };
+    view.rerender(<LiveTranscriptPanel segments={segments} hasLoaded onNoteOnLine={onNote} notes={[note]} />);
+    const marks = view.container.querySelectorAll("p[data-segment-id] mark[data-note-id]");
+    expect(marks).toHaveLength(1);
+    expect(marks[0].closest("[data-word-id]")).toHaveAttribute("data-word-id", "y2");
   });
 });

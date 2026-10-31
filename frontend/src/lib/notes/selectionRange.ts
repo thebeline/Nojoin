@@ -1,3 +1,6 @@
+import { wordRanges } from "@/lib/transcript/wordRanges";
+import type { LiveTranscriptWord } from "@/types";
+
 import { clampQuote } from "./lineSelection";
 import { selectionOf, type NoteSelection } from "./noteOutbox";
 
@@ -36,6 +39,30 @@ export const interpolatedTokens = (text: string, startMs: number, endMs: number)
     const to = from + match[0].length;
     return { text: match[0], from, to, startMs: at(from), endMs: at(to) };
   });
+};
+
+/**
+ * A marked line's words with their own times, as `TranscriptLineText` puts
+ * them in the DOM for a selection to read (`linePicksOfRange`); undefined
+ * when it marks none, so
+ * the line's words are interpolated. An untimed word takes the line's span,
+ * as a selection of it does.
+ */
+export const timedWords = (
+  text: string,
+  startMs: number,
+  endMs: number,
+  words: readonly LiveTranscriptWord[],
+): TimedToken[] | undefined => {
+  const ranges = wordRanges(text, words);
+  if (ranges.length === 0) return undefined;
+  return ranges.map(({ word, from, to }) => ({
+    text: text.slice(from, to),
+    from,
+    to,
+    startMs: word.start_ms ?? startMs,
+    endMs: word.end_ms ?? endMs,
+  }));
 };
 
 /** A line as the page draws it. */

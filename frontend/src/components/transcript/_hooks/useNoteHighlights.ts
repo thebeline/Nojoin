@@ -4,7 +4,7 @@ import { useCallback, useMemo } from "react";
 
 import type { InlineNote } from "@/lib/notes/noteOutbox";
 import { segmentEndMs, segmentStartMs } from "@/lib/notes/placement";
-import type { DrawnLine } from "@/lib/notes/selectionRange";
+import { timedWords, type DrawnLine } from "@/lib/notes/selectionRange";
 import type { TimelineNote, TranscriptSegment } from "@/types";
 
 import { noteHighlights, textOfRanges } from "../noteHighlights";
@@ -30,12 +30,14 @@ export function useNoteHighlights(
 ) {
   const lines = useMemo<DrawnLine[]>(
     () =>
-      indexSegments(segments).map(({ segment, segmentId }) => ({
-        segmentId,
-        text: segment.text,
-        startMs: segmentStartMs(segment),
-        endMs: segmentEndMs(segment),
-      })),
+      indexSegments(segments).map(({ segment, segmentId }) => {
+        const startMs = segmentStartMs(segment);
+        const endMs = segmentEndMs(segment);
+        // The words a selection reads its times from, where the line marks them.
+        const words = segment.settling_required && segment.words
+          ? timedWords(segment.text, startMs, endMs, segment.words) : undefined;
+        return { segmentId, text: segment.text, startMs, endMs, words };
+      }),
     [segments],
   );
   const highlights = useMemo(

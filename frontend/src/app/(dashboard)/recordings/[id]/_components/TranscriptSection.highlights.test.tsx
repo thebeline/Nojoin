@@ -82,13 +82,13 @@ const RECORDING = {
   speakers: [],
 } as unknown as Recording;
 
-const renderSection = (timelineNotes: TimelineNote[]) =>
+const renderSection = (timelineNotes: TimelineNote[], transcriptSegments = SEGMENTS) =>
   render(
     <TranscriptSection
       active
       recording={RECORDING}
       timelineNotes={timelineNotes}
-      transcriptSegments={SEGMENTS}
+      transcriptSegments={transcriptSegments}
       currentTime={-1}
       isPlaying={false}
       speakerMap={{ SPEAKER_0: "Alex", SPEAKER_1: "Blair" }}
@@ -198,6 +198,25 @@ describe("the words a note is on, in the processed transcript", () => {
     expect(within(line).getByTestId("timeline-note-words-changed")).toHaveTextContent(
       "Words changed since this note. Here it now reads “forty thousand”.",
     );
+  });
+
+  it("are found by a settled line's own word times, so the right one of repeated words is marked", () => {
+    // Spread evenly over the line, the second "yes" would read 436-764 ms, so a
+    // note on its real 120-220 ms would find the first one, nearer by that guess.
+    const repeated: TranscriptSegment = {
+      id: "u-yes", speaker: "SPEAKER_0", start: 0, end: 1.2, text: "yes yes yes", settling_required: true,
+      words: [
+        { id: "y1", order: 0, word: "yes", start_ms: 0, end_ms: 100, locked: true },
+        { id: "y2", order: 1, word: " yes", start_ms: 120, end_ms: 220, locked: true },
+        { id: "y3", order: 2, word: " yes", start_ms: 800, end_ms: 1200, locked: true },
+      ],
+    };
+    const note: TimelineNote = { ...EXACT, id: "n-yes", start_ms: 120, end_ms: 220, quoted_text: "yes" };
+    const view = renderSection([note], [repeated]);
+
+    const found = view.container.querySelectorAll<HTMLElement>('p[data-segment-id] mark[data-note-id="n-yes"]');
+    expect(found).toHaveLength(1);
+    expect(found[0].closest("[data-word-id]")).toHaveAttribute("data-word-id", "y2");
   });
 });
 

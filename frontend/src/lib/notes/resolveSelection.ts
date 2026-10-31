@@ -1,4 +1,4 @@
-import { interpolatedTokens, type DrawnLine } from "./selectionRange";
+import { interpolatedTokens, type DrawnLine, type TimedToken } from "./selectionRange";
 
 /**
  * Finds the words a selection note is on in the transcript as it reads now.
@@ -20,8 +20,9 @@ import { interpolatedTokens, type DrawnLine } from "./selectionRange";
  * substring matching, Sellers), scored `1 - edits / quote words`; a tie goes
  * to the run nearest the span's middle. A score of 1 is `exact`; at least
  * `floor` is `fuzzy`; anything lower is `unanchored`, and nothing is marked:
- * a highlight on the wrong words would be worse than none. Word times are
- * interpolated across each line (`interpolatedTokens`), as a selection's are.
+ * a highlight on the wrong words would be worse than none. Word times are a
+ * line's own word times where it has them, else interpolated across the line
+ * (`interpolatedTokens`), as a selection's are.
  */
 
 export type AnchorState = "exact" | "fuzzy" | "unanchored";
@@ -94,6 +95,29 @@ const comparableWords = (text: string): string[] =>
     .map(comparableWord)
     .filter((word) => word !== "");
 
+/**
+ * A line's words, each timed as a selection of just that word is
+ * (`pickSpan`): from the line's own words where it has them, else
+ * interpolated. The words are split as interpolation splits them, so a
+ * quote reads the same either way.
+ */
+const lineTokens = (line: DrawnLine): TimedToken[] => {
+  const tokens = interpolatedTokens(line.text, line.startMs, line.endMs);
+  const words = line.words;
+  if (!words) return tokens;
+  let first = 0;
+  return tokens.map((token) => {
+    while (first < words.length && words[first].to <= token.from) first += 1;
+    let startMs = Infinity;
+    let endMs = -Infinity;
+    for (let at = first; at < words.length && words[at].from < token.to; at += 1) {
+      startMs = Math.min(startMs, words[at].startMs);
+      endMs = Math.max(endMs, words[at].endMs);
+    }
+    return startMs <= endMs ? { ...token, startMs, endMs } : token;
+  });
+};
+
 /** Every word of `lines` timed within `[fromMs, toMs]`, lines in time order. */
 const tokensWithin = (lines: readonly DrawnLine[], fromMs: number, toMs: number): WindowToken[] =>
   lines
@@ -102,7 +126,7 @@ const tokensWithin = (lines: readonly DrawnLine[], fromMs: number, toMs: number)
     .filter(({ line }) => line.endMs >= fromMs && line.startMs <= toMs)
     .sort((left, right) => left.line.startMs - right.line.startMs || left.index - right.index)
     .flatMap(({ line }) =>
-      interpolatedTokens(line.text, line.startMs, line.endMs)
+      lineTokens(line)
         .filter((token) => token.endMs >= fromMs && token.startMs <= toMs)
         .map((token) => ({
           segmentId: line.segmentId,
